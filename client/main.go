@@ -785,7 +785,23 @@ func oneTurnConnectionLoop(ctx context.Context, turnParams *turnParams, peer *ne
 	}
 }
 
+// Create a persistent dialer that knows how to talk to your DNS
+var customDialer = &net.Dialer{
+	Resolver: &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			// Force it to use a public DNS (Yandex in this case)
+			return d.DialContext(ctx, "udp", "77.88.8.8:53")
+		},
+	},
+}
+
 func main() { //nolint:cyclop
+	net.DefaultResolver = customDialer.Resolver
+	// Also override the default HTTP transport if the proxy uses it
+	http.DefaultTransport.(*http.Transport).DialContext = customDialer.DialContext
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	signalChan := make(chan os.Signal, 1)
